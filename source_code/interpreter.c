@@ -6,5 +6,5 @@ int main(void) {
     //registers
     unsigned short I;
     unsigned short pc;
-    unsigned char v[16]
+    unsigned char v[16];
 }
