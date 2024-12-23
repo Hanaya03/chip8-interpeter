@@ -1,0 +1,29 @@
+{
+    "configurations": [
+        {
+            "name": "Win32",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "C:\\MinGW\\include\\SDL2"
+            ],
+            "defines": [
+                "_DEBUG",
+                "UNICODE",
+                "_UNICODE"
+            ],
+            "compilerPath": "C:\\MinGW\\bin\\gcc.exe",
+            "cStandard": "c11",
+            "cppStandard": "gnu++14",
+            "intelliSenseMode": "windows-gcc-x86",
+            "compilerArgs": [
+                "-IC:\\MinGW\\include\\SDL2\\",
+                "-LC:\\mingw\\lib",
+                "-w ",
+                "-Wl,-subsystem,windows",
+                "-lmingw32",
+                "-lSDL2main -lSDL2"
+            ]
+        }
+    ],
+    "version": 4
+}
