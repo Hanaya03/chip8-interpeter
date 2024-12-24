@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <math.h>
 #include <windows.h>
 #include <time.h>
 #include <SDL.h>
@@ -21,6 +22,8 @@ SDL_Window* win;
 SDL_Surface* winSurface;
 Uint32 white;
 Uint32 black;
+unsigned char delay_timer;
+unsigned char sound_timer;
 unsigned char memory[4096];
 unsigned short instruction;
 int start_of_program = 512;
@@ -82,7 +85,7 @@ unsigned char handle_input(){
         return 0x0f;
         break;
     default:
-        return 0x00;
+        return 0x10;
         break;
     }
 }
@@ -138,58 +141,82 @@ DWORD WINAPI delay_loop(LPVOID lpParam){
 
 void shift_register_right(int reg1, int reg2){
     if(shift_flag){v[reg1] = v[reg2];}
-    if((v[reg1] & 0x01) == 0x01){v[15] = 0x01;}
+    printf("shifting register %d(%x) to the right. ", reg1, v[reg1]);
+    if((v[reg1] & 0x01) == 0x01){
+        printf("overflow. ");
+        v[15] = 0x01;}
     v[reg1] = v[reg1] >> 1;
+    printf("is now %x\n", v[reg1]);
 }
 
 void shift_register_left(int reg1, int reg2){
     if(shift_flag){v[reg1] = v[reg2];}
-    if((v[reg1] & 0x80) == 0x80){v[15] = 0x01;}
+    printf("shifting register %d(%x) to the right. ", reg1, v[reg1]);
+    if((v[reg1] & 0x80) == 0x80){
+        printf("overflow. ");
+        v[15] = 0x01;}
     v[reg1] = v[reg1] << 1;
+    printf("is now %x\n", v[reg1]);
+}
+
+void wait_for_key(int reg){
+    printf("waiting on %x input\n", v[reg]);
+    if(event.type == SDL_KEYUP){
+        printf("input\n");
+        if(handle_input() < 0x10){
+            PC = v[reg];
+        }else{PC  -= 2;}
+    }
 }
 
 void skip_if_key_down(int reg){
-    if(SDL_PollEvent(&event)){
-        if(event.type == SDL_KEYDOWN){
-            if(event.key.keysym.scancode == v[reg]){
-                PC += 2;
-            }
+    printf("checking for %x input\n", v[reg]);
+    if(event.type == SDL_KEYDOWN){
+        if(handle_input() == v[reg]){
+            PC += 2;
         }
     }
 }
 
 void skip_if_key_not_down(int reg){
-    if(SDL_PollEvent(&event)){
-        if(event.type == SDL_KEYDOWN){
-            if(handle_input() != v[reg]){
-                PC += 2;
-            }
+    printf("checking for NOT %x input\n", v[reg]);
+    if(event.type == SDL_KEYDOWN){
+        if(handle_input() != v[reg]){
+            printf("true\n");
+            PC += 2;
         }
     }
 }
 
 void if_equal(int reg, unsigned char value){
+    printf("checking if register %d(%x) is equal to %x\n", reg, v[reg], value);
     if (v[reg] == value){
+        printf("true\n");
         PC += 2;
     }
     
 }
 
 void if_registers_equal(int reg1, int reg2){
+    printf("checking if registers %d(%x) and %d(%x) are equal", reg1, v[reg1], reg2, v[reg2]);
     if (v[reg1] == v[reg2]){
+        printf("true\n");
         PC += 2;
     }
     
 }
 
 void if_not_equal(int reg, unsigned char value){
+    printf("checking if register %d(%x) is not equal to %x\n", reg, v[reg], value);
     if (v[reg] != value){
+        printf("true\n");
         PC += 2;
     }
     
 }
 
 void if_registers_not_equal(int reg1, int reg2){
+    printf("checking if registers %d(%x) and %d(%x) are not equal", reg1, v[reg1], reg2, v[reg2]);
     if (v[reg1] != v[reg2]){
         PC += 2;
     }
@@ -197,74 +224,86 @@ void if_registers_not_equal(int reg1, int reg2){
 }
 
 void return_from_subroutine(){
-    printf("PC before pop: %x ", PC);
+    printf("returing from subroutine. setting PC(%x) to %x. ", PC, peak_stack(&chip_stack));
     PC = pop_stack(&chip_stack);
-    printf("PC after pop: %x\n", PC);
-    sleep(2);
+    printf("PC is now %x", PC);
 }
 
-void call_subroutine(unsigned char addr){
+void call_subroutine(unsigned short addr){
+    printf("pushing %x to stack. ", PC);
     push_to_stack(&chip_stack, PC);
+    printf("is now %x. setting PC to %x. ", peak_stack(&chip_stack), addr);
     PC = addr;
-    printf("pushing %x to stack, setting PC to %x\n", peak_stack(&chip_stack), PC);
-    sleep(2);
+    printf("PC is now %x\n", PC);
 }
 
 void clear_screen(){
     SDL_FillRect(winSurface, NULL, black);
     SDL_UpdateWindowSurface(win);
-    printf("clearing screen\n");
 }
 
 void jump_to_address(unsigned short addr){
-    printf("setting PC to %x, was %x, ", addr, PC);
     PC = addr;
-    printf(" is %x\n", PC);
+    printf("setting PC to %x\n", addr);
 }
 
 void jump_with_offset(unsigned short addr){
+    printf("Changing PC to %x, was", addr, PC);
     PC = addr;
-    if (jump_flag){PC += v[0];}
-    else{PC += v[(int)(addr >> 8) & 0x0f];}
+    printf("is now %x\n", PC);
+    if (jump_flag){
+        printf("adding register 0(%x) to PC(%x)", v[0], PC); 
+        PC += v[0];}
+    else{
+        printf("adding register %d(%x) to PC(%x)", (int)(addr >> 8) & 0x0f, v[(int)(addr >> 8) & 0x0f], PC); 
+        PC += v[(int)(addr >> 8) & 0x0f];}
 }
 
 void set_register(int reg, unsigned char value){
+    printf("setting register %d(%x) to %x ", reg, v[reg], value);
     v[reg] = value;
-    printf("setting register %d to %x, is now %x\n", reg, value, v[reg]);
+    printf("is now %x\n", v[reg]);
 }
 
-set_random_value(int reg, unsigned char value){
+void set_random_value(int reg, unsigned char value){
     v[reg] = ((unsigned char)rand() % 255) & value;
 }
 
 void add_registers(int reg1, int reg2){
+    printf("adding registers %d(%x) and %d(%x)", reg1, v[reg1], reg2, v[reg2]);
     v[reg1] = v[reg1] + v[reg2];
-    if(v[reg1] + v[reg2] > 255)
+    printf(" stored %x into %d\n", v[reg1], reg1);
+    if(v[reg1] + v[reg2] > 255){
+        printf("overflow!\n");
         v[15] = 0x01; 
-    printf("adding registers %d and %d, is now %x\n", reg1, reg2, v[reg1]);
+    }
 }
 
 void sub_registers(int dest, int reg1, int reg2){
+    printf("subtracting %d(%x) from %d(%x). storing into %d ", reg2, v[reg2], reg1, v[reg1], dest);
     v[15] = 0x01;
     if(v[reg2] > v[reg1]){v[15] = 0x00;}
     v[dest] = v[reg1] - v[reg2];
+    printf("result is %x\n", v[dest]);
 }
 
 void add_to_register(int reg, unsigned char value){
+    printf("adding %x to register %d(%x) ", value, reg, v[reg]);
     v[reg] += value;
-    printf("adding %x to register %d, is now %x\n", value, reg, v[reg]);
+    printf("is now %x\n", v[reg]);
 }
 
 void set_index_register(unsigned short value){
+    printf("setting Index to %x was %x ", value, I);
     I = value;
-    printf("setting I to %x, is now %x\n", value, I);
+    printf("is now %x\n", I);
 }
 
 void draw_to_screen(int x, int y, int rows){
-    printf("drawing a sprite at x:%d, y:%d; %d pixels tall\n", x, y, rows);
     v[15] = 0x00;
+    printf("printing to x: %d, y: %d, height: %d. from sprite at %x\n", x, y, rows, I);
     for(int i = 0; i < rows; i++){
-        
+
         if(y + i > screen_height){break;}
 
         for(int j = 0; j < 8; j++){
@@ -273,6 +312,7 @@ void draw_to_screen(int x, int y, int rows){
                 if(x + j > screen_width){break;}
 
                 if(set_pixel(winSurface, x + j, y + i)){
+                    printf("pixel at %d, %d, was white\n", x, y);
                     v[15] = 0x01;
                 }
             }
@@ -338,6 +378,111 @@ void determine_skip_op(){
     }
 }
 
+void set_index_to_font(int reg){
+    switch (v[reg])
+    {
+    case 0x00:
+        set_index_register(0x0050);
+        break;
+    case 0x01:
+        set_index_register(0x0050 + 5);
+        break;
+    case 0x02:
+        set_index_register(0x0050 + 10);
+        break;
+    case 0x03:
+        set_index_register(0x0050 + 15);
+        break;
+    case 0x04:
+        set_index_register(0x0050 + 20);
+        break;
+    case 0x05:
+        set_index_register(0x0050 + 25);
+        break;
+    case 0x06:
+        set_index_register(0x0050 + 30);
+        break;
+    case 0x07:
+        set_index_register(0x0050 + 35);
+        break;
+    case 0x08:
+        set_index_register(0x0050 + 40);
+        break;
+    case 0x09:
+        set_index_register(0x0050 + 45);
+        break;
+    case 0x0a:
+        set_index_register(0x0050 + 50);
+        break;
+    case 0x0b:
+        set_index_register(0x0050 + 55);
+        break;
+    case 0x0c:
+        set_index_register(0x0050 + 60);
+        break;
+    case 0x0d:
+        set_index_register(0x0050 + 65);
+        break;
+    case 0x0e:
+        set_index_register(0x0050 + 70);
+        break;
+    case 0x0f:
+        set_index_register(0x0050 + 75);
+        break;
+    default:
+        break;
+    }
+}
+
+void determine_f_op(int reg, unsigned char value){
+    printf("checking for f op with register %d and value %x\n", reg, value);
+    switch (value)
+    {
+    case 0x07:
+        v[reg] = delay_timer;
+        printf("setting register %d(%x) to delay_timer\n", reg, v[reg]);
+        break;
+    case 0x15:
+        delay_timer = v[reg];
+        printf("setting delay timer to register %d(%x)\n", reg, v[reg]);
+        break;
+    case 0x18:
+        sound_timer = v[reg];
+        printf("setting sound timer to register %d(%x)\n", reg, v[reg]);
+        break;
+    case 0x1e:
+        printf("setting Index(%x) to register %d(%x) ", I, reg, v[reg]);
+        I += v[reg];
+        printf("is now %x\n", I);
+        if(I > 0x1000){ printf("overflow\n"); v[15] = 0x01;}
+        break;
+    case 0x0a:
+        wait_for_key(reg);
+        break;
+    case 0x29:
+        set_index_to_font(reg);
+        break;
+    case 0x33:
+        memory[I] = floor(v[reg] / 100);
+        memory[I + 1] = floor(v[reg] / 10);
+        memory[I + 1] = memory[I + 1] % 10;
+        memory[I + 2] = v[reg] % 10;
+        break;
+    case 0x55:
+        for(int i = 0; i <= reg; i++){
+            memory[I + i] = v[i];
+        }
+        break;
+    case 0x65:
+        for(int i = 0; i <= reg; i++){
+            v[i] = memory[I + i];
+        }
+        break;
+    default:
+        break;
+    }
+}
+
 //get the instruction at pc and pc + 1
 //increment pc by 2
 void fetch_instruction(){
@@ -346,6 +491,8 @@ void fetch_instruction(){
     instruction = instruction << 8;
     instruction += memory[PC];
     PC++;
+
+    printf("current instruction: %x\n", instruction);
 }
 
 void decode_then_execute_instruction(){
@@ -400,15 +547,14 @@ void decode_then_execute_instruction(){
     case 0x0e:
         determine_skip_op();
         break;
+    case 0x0f:
+        determine_f_op((int)((int)(instruction >> 8) & 0x0f),
+                       instruction & 0x00ff);
+        break;
     default:
         break;
     }
 }
-
-void execute_instruction(){
-
-}
-
 
 int main(int argc, char** argv) {
 	// Initialize SDL. SDL_Init will return -1 if it fails.
@@ -449,8 +595,8 @@ int main(int argc, char** argv) {
     //initializing components
     black = SDL_MapRGB(winSurface->format, 0, 0, 0);
     white = SDL_MapRGB(winSurface->format, 255, 255, 255);
-    unsigned char delay_timer = 0xff;
-    unsigned char sound_timer = 0xff;
+    delay_timer = 0xff;
+    sound_timer = 0xff;
     double chip_update_rate = 1/instructions;
     clock_t t;
     chip_stack.curr_elements = 0;
@@ -479,23 +625,23 @@ int main(int argc, char** argv) {
     write_to_memory(80, font, 80);
     write_to_memory(start_of_program, buffer, filelen);
 
-    // HANDLE delay_thread = CreateThread(NULL, 0, delay_loop, &delay_timer, 0, NULL);
-    // HANDLE sound_thread = CreateThread(NULL, 0, delay_loop, &sound_timer, 0, NULL);
-    // HANDLE threadArray[2] = {delay_thread, sound_thread};
+    HANDLE delay_thread = CreateThread(NULL, 0, delay_loop, &delay_timer, 0, NULL);
+    HANDLE sound_thread = CreateThread(NULL, 0, delay_loop, &sound_timer, 0, NULL);
+    HANDLE threadArray[2] = {delay_thread, sound_thread};
 
     t = clock();
-    int i = 0;
     while(TRUE){
+        SDL_PollEvent(&event);
         if((double)t + chip_update_rate <= clock()){
+            // SDL_WaitEvent(&event);
             fetch_instruction();
             decode_then_execute_instruction();
+            // sleep(1);
         }
-        i++;
     }
     // WaitForMultipleObjects(2, threadArray, TRUE, INFINITE);
 
     // CloseHandle(threadArray[0]);
     // CloseHandle(threadArray[1]);
-    Sleep(10);
     SDL_DestroyWindow(win);
 }
