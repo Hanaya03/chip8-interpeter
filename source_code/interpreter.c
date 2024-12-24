@@ -34,54 +34,71 @@ unsigned short PC = 0x0200;
 unsigned char v[16];
 
 unsigned char handle_input(){
+    printf("comparing key: %d", event.key.keysym.scancode);
     switch (event.key.keysym.scancode)
     {
     case SDL_SCANCODE_1:
+        printf("input: 0x01\n");
         return 0x01;
         break;
     case SDL_SCANCODE_2:
+        printf("input: 0x02\n");
         return 0x02;
         break;
     case SDL_SCANCODE_3:
+        printf("input: 0x03\n");
         return 0x03;
         break;
     case SDL_SCANCODE_4:
+        printf("input: 0x0c\n");
         return 0x0c;
         break;
     case SDL_SCANCODE_Q:
+        printf("input: 0x04\n");
         return 0x04;
         break;
     case SDL_SCANCODE_W:
+        printf("input: 0x05\n");
         return 0x05;
         break;
     case SDL_SCANCODE_E:
+        printf("input: 0x06\n");
         return 0x06;
         break;
     case SDL_SCANCODE_R:
+        printf("input: 0x0d\n");
         return 0x0d;
         break;
     case SDL_SCANCODE_A:
+        printf("input: 0x07\n");
         return 0x07;
         break;
     case SDL_SCANCODE_S:
+        printf("input: 0x08\n");
         return 0x08;
         break;
     case SDL_SCANCODE_D:
+        printf("input: 0x09\n");
         return 0x09;
         break;
     case SDL_SCANCODE_F:
+        printf("input: 0x0e\n");
         return 0x0e;
         break;
     case SDL_SCANCODE_Z:
+        printf("input: 0x0a\n");
         return 0x0a;
         break;
     case SDL_SCANCODE_X:
+        printf("input: 0x00\n");
         return 0x00;
         break;
     case SDL_SCANCODE_C:
+        printf("input: 0x0b\n");
         return 0x0b;
         break;
     case SDL_SCANCODE_V:
+        printf("input: 0x0f\n");
         return 0x0f;
         break;
     default:
@@ -151,7 +168,7 @@ void shift_register_right(int reg1, int reg2){
 
 void shift_register_left(int reg1, int reg2){
     if(shift_flag){v[reg1] = v[reg2];}
-    printf("shifting register %d(%x) to the right. ", reg1, v[reg1]);
+    printf("shifting register %d(%x) to the left. ", reg1, v[reg1]);
     if((v[reg1] & 0x80) == 0x80){
         printf("overflow. ");
         v[15] = 0x01;}
@@ -216,8 +233,9 @@ void if_not_equal(int reg, unsigned char value){
 }
 
 void if_registers_not_equal(int reg1, int reg2){
-    printf("checking if registers %d(%x) and %d(%x) are not equal", reg1, v[reg1], reg2, v[reg2]);
+    printf("checking if registers %d(%x) and %d(%x) are not equal\n", reg1, v[reg1], reg2, v[reg2]);
     if (v[reg1] != v[reg2]){
+        printf("true! skipping pc %d\n", PC);
         PC += 2;
     }
     
@@ -226,7 +244,7 @@ void if_registers_not_equal(int reg1, int reg2){
 void return_from_subroutine(){
     printf("returing from subroutine. setting PC(%x) to %x. ", PC, peak_stack(&chip_stack));
     PC = pop_stack(&chip_stack);
-    printf("PC is now %x", PC);
+    printf("PC is now %x\n", PC);
 }
 
 void call_subroutine(unsigned short addr){
@@ -270,24 +288,29 @@ void set_random_value(int reg, unsigned char value){
 }
 
 void add_registers(int reg1, int reg2){
+    unsigned short tmp = v[reg1] + v[reg2];
     printf("adding registers %d(%x) and %d(%x)", reg1, v[reg1], reg2, v[reg2]);
-    v[reg1] = v[reg1] + v[reg2];
+    v[reg1] = tmp;
     printf(" stored %x into %d\n", v[reg1], reg1);
-    if(v[reg1] + v[reg2] > 255){
-        printf("overflow!\n");
+    v[15] = 0x00;
+    if(tmp > 0xff){
+        printf("overflow! ");
         v[15] = 0x01; 
     }
+
 }
 
 void sub_registers(int dest, int reg1, int reg2){
+    unsigned short tmp = v[reg1] - v[reg2];
     printf("subtracting %d(%x) from %d(%x). storing into %d ", reg2, v[reg2], reg1, v[reg1], dest);
     v[15] = 0x01;
     if(v[reg2] > v[reg1]){v[15] = 0x00;}
-    v[dest] = v[reg1] - v[reg2];
+    v[dest] = tmp;
     printf("result is %x\n", v[dest]);
 }
 
 void add_to_register(int reg, unsigned char value){
+    v[15] = 0x00; 
     printf("adding %x to register %d(%x) ", value, reg, v[reg]);
     v[reg] += value;
     printf("is now %x\n", v[reg]);
@@ -301,7 +324,7 @@ void set_index_register(unsigned short value){
 
 void draw_to_screen(int x, int y, int rows){
     v[15] = 0x00;
-    printf("printing to x: %d, y: %d, height: %d. from sprite at %x\n", x, y, rows, I);
+    printf("printing to x: %d, y: %d, height: %d. from sprite at %d\n", x, y, rows, I);
     for(int i = 0; i < rows; i++){
 
         if(y + i > screen_height){break;}
@@ -312,7 +335,7 @@ void draw_to_screen(int x, int y, int rows){
                 if(x + j > screen_width){break;}
 
                 if(set_pixel(winSurface, x + j, y + i)){
-                    printf("pixel at %d, %d, was white\n", x, y);
+                    printf("pixel at %d, %d, was white\n", x + j, y + i);
                     v[15] = 0x01;
                 }
             }
@@ -345,7 +368,7 @@ void determine_bitwise_op(unsigned char last_nibble){
         break;
     case 0x04:
         //add registers of 2nd and 3rd nibble. store in register of 2nd nibble
-        add_registers((int)(instruction >> 8) & 0x0f, (int)(instruction >> 4) & 0x0f);
+        add_registers((int)((instruction >> 8) & 0x0f), (int)((instruction >> 4) & 0x0f));
         break;
     case 0x05:
         sub_registers((int)(instruction >> 8) & 0x0f,
@@ -357,9 +380,9 @@ void determine_bitwise_op(unsigned char last_nibble){
                              (int)(instruction >> 4) & 0x0f);
         break;
     case 0x07:
-        sub_registers((int)(instruction >> 4) & 0x0f,
-                      (int)(instruction >> 8) & 0x0f,
-                      (int)(instruction >> 4) & 0x0f);
+        sub_registers((int)(instruction >> 8) & 0x0f,
+                      (int)(instruction >> 4) & 0x0f,
+                      (int)(instruction >> 8) & 0x0f);
         break;
     case 0x0e:
         shift_register_left((int)(instruction >> 8) & 0x0f,
@@ -527,7 +550,7 @@ void decode_then_execute_instruction(){
         determine_bitwise_op(instruction & 0x0f);
         break;
     case 0x09:
-        if_registers_not_equal((int)(instruction >> 8) & 0x0f, (int)(instruction & 0xf0));
+        if_registers_not_equal((int)(instruction >> 8) & 0x0f, (int)(instruction >> 4 & 0x0f));
         break;
     case 0x0a:
         set_index_register(instruction & 0x0fff);
