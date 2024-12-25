@@ -161,8 +161,13 @@ void shift_register_right(int reg1, int reg2){
     printf("shifting register %d(%x) to the right. ", reg1, v[reg1]);
     if((v[reg1] & 0x01) == 0x01){
         printf("overflow. ");
-        v[15] = 0x01;}
-    v[reg1] = v[reg1] >> 1;
+        v[reg1] = v[reg1] >> 1;
+        v[15] = 0x01;
+    }else{
+        v[reg1] = v[reg1] >> 1;
+        v[15] = 0x00;
+    }
+    
     printf("is now %x\n", v[reg1]);
 }
 
@@ -171,8 +176,14 @@ void shift_register_left(int reg1, int reg2){
     printf("shifting register %d(%x) to the left. ", reg1, v[reg1]);
     if((v[reg1] & 0x80) == 0x80){
         printf("overflow. ");
-        v[15] = 0x01;}
-    v[reg1] = v[reg1] << 1;
+        v[reg1] = v[reg1] << 1;
+        v[15] = 0x01;
+    }else{
+        v[reg1] = v[reg1] << 1;
+        v[15] = 0x00;
+    }
+
+    
     printf("is now %x\n", v[reg1]);
 }
 
@@ -303,9 +314,8 @@ void add_registers(int reg1, int reg2){
 void sub_registers(int dest, int reg1, int reg2){
     unsigned short tmp = v[reg1] - v[reg2];
     printf("subtracting %d(%x) from %d(%x). storing into %d ", reg2, v[reg2], reg1, v[reg1], dest);
-    v[15] = 0x01;
-    if(v[reg2] > v[reg1]){v[15] = 0x00;}
-    v[dest] = tmp;
+    if(v[reg2] <= v[reg1]){v[dest] = tmp;v[15] = 0x01;}
+    else{v[dest] = tmp;v[15] = 0x00;}
     printf("result is %x\n", v[dest]);
 }
 
