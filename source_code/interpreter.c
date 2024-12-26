@@ -10,7 +10,7 @@
 #define screen_height 32
 
 struct stack{
-    unsigned short elements[16];
+    unsigned short elements[32];
     int curr_elements;
 };
 
@@ -33,9 +33,9 @@ unsigned short I;
 unsigned short PC = 0x0200;
 unsigned char v[16];
 
-unsigned char handle_input(){
+unsigned char handle_input(int scancode){
     printf("comparing key: %d", event.key.keysym.scancode);
-    switch (event.key.keysym.scancode)
+    switch (scancode)
     {
     case SDL_SCANCODE_1:
         printf("input: 0x01\n");
@@ -147,7 +147,7 @@ DWORD WINAPI delay_loop(LPVOID lpParam){
     unsigned char *timer = (unsigned char *)lpParam;
     clock_t t = clock();
     while(TRUE){
-        if((double)t + update_rate <= (double)clock()){
+        if((double)t + update_rate <= (double)clock() && timer > 0){
             (*timer)--;
             t = clock();
             sleep(0);
@@ -191,7 +191,7 @@ void wait_for_key(int reg){
     printf("waiting on %x input\n", v[reg]);
     if(event.type == SDL_KEYUP){
         printf("input\n");
-        if(handle_input() < 0x10){
+        if(handle_input(event.key.keysym.scancode) < 0x10){
             PC = v[reg];
         }else{PC  -= 2;}
     }
@@ -200,7 +200,7 @@ void wait_for_key(int reg){
 void skip_if_key_down(int reg){
     printf("checking for %x input\n", v[reg]);
     if(event.type == SDL_KEYDOWN){
-        if(handle_input() == v[reg]){
+        if(handle_input(event.key.keysym.scancode) == v[reg]){
             PC += 2;
         }
     }
@@ -209,7 +209,7 @@ void skip_if_key_down(int reg){
 void skip_if_key_not_down(int reg){
     printf("checking for NOT %x input\n", v[reg]);
     if(event.type == SDL_KEYDOWN){
-        if(handle_input() != v[reg]){
+        if(handle_input(event.key.keysym.scancode) != v[reg]){
             printf("true\n");
             PC += 2;
         }
@@ -333,7 +333,6 @@ void set_index_register(unsigned short value){
 }
 
 void draw_to_screen(int x, int y, int rows){
-    v[15] = 0x00;
     printf("printing to x: %d, y: %d, height: %d. from sprite at %d\n", x, y, rows, I);
     for(int i = 0; i < rows; i++){
 
@@ -347,6 +346,8 @@ void draw_to_screen(int x, int y, int rows){
                 if(set_pixel(winSurface, x + j, y + i)){
                     printf("pixel at %d, %d, was white\n", x + j, y + i);
                     v[15] = 0x01;
+                }else{
+                    v[15] = 0x00;
                 }
             }
         }
@@ -487,7 +488,7 @@ void determine_f_op(int reg, unsigned char value){
         printf("setting Index(%x) to register %d(%x) ", I, reg, v[reg]);
         I += v[reg];
         printf("is now %x\n", I);
-        if(I > 0x1000){ printf("overflow\n"); v[15] = 0x01;}
+        if(I >= 0x1000){ printf("overflow\n"); v[15] = 0x01;}
         break;
     case 0x0a:
         wait_for_key(reg);
@@ -503,12 +504,12 @@ void determine_f_op(int reg, unsigned char value){
         break;
     case 0x55:
         for(int i = 0; i <= reg; i++){
-            memory[I + i] = v[i];
+            memory[(int)I + i] = v[i];
         }
         break;
     case 0x65:
         for(int i = 0; i <= reg; i++){
-            v[i] = memory[I + i];
+            v[i] = memory[(int)I + i];
         }
         break;
     default:
